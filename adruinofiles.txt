@@ -1,0 +1,81 @@
+#define TINY_GSM_MODEM_SIM800
+#include <DHT.h>
+#include <LiquidCrystal.h>
+#include <TinyGsmClient.h>
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+
+#define DHTPIN 8
+#define VIBRATION_SENSOR_PIN 13
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+SoftwareSerial sim800l(7, 10);
+TinyGsm modem(sim800l);
+
+void setup() {
+  // Инициализация серийного порта, LCD, DHT и SIM800L
+  Serial.begin(9600);
+  lcd.begin(16, 2);
+  dht.begin();
+  sim800l.begin(9600);
+  modem.restart();
+  
+  // Ваш оператор APN
+  const char apn[] = "mts";
+  const char user[] = "user";
+  const char pass[] = "pass";
+  
+  // Подключение к сети и интернету
+  modem.gprsConnect(apn, user, pass);
+}
+
+void loop() {
+  // Чтение данных с датчика
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  int  vibration = digitalRead(VIBRATION_SENSOR_PIN);
+  
+  // Отображение данных на LCD
+  lcd.clear();
+  lcd.print("Temp: ");
+  lcd.print(t);
+  lcd.print(" C");
+  lcd.setCursor(0, 1);
+  lcd.print("Humidity: ");
+  lcd.print(h);
+  lcd.print(" %");
+  delay(5000); // Обновление каждые 5 сек
+    
+  lcd.clear();
+  lcd.print("Vibrations: ");
+  lcd.print(vibration == HIGH ? "low" : "high");
+  delay(5000); // Обновление каждые 5 сек
+  
+  // Отправка данных на сервер (каждую минуту)
+  static unsigned long lastSend = 0;
+  if (millis() - lastSend >= 60000) {
+    lastSend = millis();
+    if (modem.isGprsConnected()) {
+      sendToServer(t, h, vibration);
+    }
+  }
+}
+
+void sendToServer(float temperature, float humidity, int vibration) {
+  // IP и порт вашего сервера
+  const char server[] = "your_server_ip";
+  String path = "/update?temp=" + String(temperature) + "&hum=" + String(humidity) + "&shock=" + String(vibration);
+  
+  // Отправка HTTP GET запроса на сервер
+  TinyGsmClient client(modem);
+  if (client.connect(server, 80)) {
+    client.print(String("GET ") + path + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + server + "\r\n");
+    client.print("Connection: close\r\n\r\n");
+    client.stop();
+  }
+}

@@ -1,0 +1,21 @@
+from flask import Flask, request
+import folium
+
+app = Flask(__name__)
+
+@app.route('/update')
+def update():
+    temperature = request.args.get('temp')
+    humidity = request.args.get('hum')
+    vibration = request.args.get('vibration')
+    
+    # Отображение на карте
+    m = folium.Map(location=[50, 50], zoom_start=15)
+    folium.Marker([50, 50], 
+                  popup=f'Temperature: {temperature}C\nHumidity: {humidity}%\nShock: {"Detected" if shock == "1" else "Safe"}').add_to(m)
+    m.save('map.html')
+    
+    return "Data received", 200
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=80)
